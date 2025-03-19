@@ -6,3 +6,6 @@ input_folders:
 
 # リネームしたPDFを保存するフォルダパス（絶対パスまたは相対パス）
 output_folder: "./outputs"
+
+# 処理済みのPDFファイルの移動先フォルダ
+processed_folder: "./processed_papers"

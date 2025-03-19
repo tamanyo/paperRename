@@ -399,7 +399,8 @@ def main():
             # サンプル設定ファイルを作成
             sample_config = {
                 "input_folders": ["./papers"],  # 論文PDFが保存されているフォルダ
-                "output_folder": "./outputs"  # 出力先フォルダ
+                "output_folder": "./outputs",  # 出力先フォルダ
+                "processed_folder": "./processed_papers"  # 処理済みファイルの移動先フォルダ
             }
             with open(config_path, 'w', encoding='utf-8') as f:
                 yaml.dump(sample_config, f, default_flow_style=False, allow_unicode=True)
@@ -416,6 +417,7 @@ def main():
             input_folders = [config.get('input_folder')]
             
         output_folder = config.get('output_folder', './outputs')
+        processed_folder = config.get('processed_folder', './processed_papers')
         
         # 入力フォルダが指定されていない場合はエラー
         if not input_folders:
@@ -426,13 +428,19 @@ def main():
         if not os.path.isabs(output_folder):
             output_folder = os.path.join(os.path.dirname(os.path.abspath(__file__)), output_folder)
         
-        # 出力フォルダが存在しない場合は作成
+        # 相対パスを絶対パスに変換（処理済みフォルダ）
+        if not os.path.isabs(processed_folder):
+            processed_folder = os.path.join(os.path.dirname(os.path.abspath(__file__)), processed_folder)
+        
+        # 出力フォルダと処理済みフォルダが存在しない場合は作成
         os.makedirs(output_folder, exist_ok=True)
+        os.makedirs(processed_folder, exist_ok=True)
         
         # 処理状況のカウント
         total_files = 0
         processed_files = 0
         skipped_files = 0
+        moved_files = 0
         
         # 処理済みファイルのハッシュを記録
         processed_file_hashes = set()
@@ -500,11 +508,31 @@ def main():
                             # 処理済みハッシュに追加
                             if file_hash:
                                 processed_file_hashes.add(file_hash)
+                            
+                            # 処理済みファイルを移動
+                            processed_filename = os.path.basename(pdf_path)
+                            processed_path = os.path.join(processed_folder, processed_filename)
+                            
+                            # 同名ファイルが移動先にある場合は連番を付加
+                            counter = 1
+                            while os.path.exists(processed_path):
+                                base_name, ext = os.path.splitext(processed_filename)
+                                processed_filename = f"{base_name}_{counter}{ext}"
+                                processed_path = os.path.join(processed_folder, processed_filename)
+                                counter += 1
+                            
+                            # ファイルを移動（コピー＋削除）
+                            try:
+                                shutil.move(pdf_path, processed_path)
+                                logger.info(f"移動完了: {pdf_path} → {processed_path}")
+                                moved_files += 1
+                            except Exception as e:
+                                logger.error(f"ファイル移動中にエラーが発生しました: {pdf_path} - {str(e)}")
                         
                         except Exception as e:
                             logger.error(f"ファイル処理中にエラーが発生しました: {pdf_path} - {str(e)}")
         
-        logger.info(f"処理完了: 合計{total_files}ファイル中、{processed_files}ファイルを処理しました。{skipped_files}ファイルはスキップされました。")
+        logger.info(f"処理完了: 合計{total_files}ファイル中、{processed_files}ファイルを処理し、{moved_files}ファイルを移動しました。{skipped_files}ファイルはスキップされました。")
     
     except Exception as e:
         logger.error(f"実行中にエラーが発生しました: {str(e)}")
